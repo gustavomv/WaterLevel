@@ -1,12 +1,12 @@
 #include <PubSubClient.h>
 #include <WiFiEsp.h>
 #include <SoftwareSerial.h>
-#include <Servo.h>
-#define MQTT_SERVER "test.mosca.io"
-char ssid[] = "Livre";
-char passwd[] = "livre2017";
 
-char* lightTopic = "/rexproject/esp/02";
+#define MQTT_SERVER "test.mosca.io"
+char ssid[] = "motog";
+char passwd[] = "12345678";
+
+char* lightTopic = "/rexproject/esp/01";
 
 void callback(char* topic, byte* payload, unsigned int length);
 
@@ -14,17 +14,15 @@ WiFiEspClient wifiClient;
 PubSubClient client(MQTT_SERVER, 1883, callback, wifiClient);
 
 SoftwareSerial Serial1(13, 12);
+#include <Servo.h>
 Servo motor;
 
 //sensores
 #define echo 2
 #define echo0 4
-#define trig 5
-
-//button_rst
-#define rst 11
-#define button_rst 10
+#define trig 3
 //leds
+#define led_wifi 5
 #define led_r 7
 #define led_g 8
 //motor
@@ -36,22 +34,22 @@ int mtr = 6;
 
 int _reset = 1;
 float raio, lado_a, lado_b, volume, maximo;
-
+long anterior = 0;
 int form;
 
 
 void reset();
 void calculate();
 void button();
-float lvl();
+float lvl(int n);
 void triPulse(const int a);
 void move_motor();
 void alarme();
-
+void reconnect();
 
 void setup(){
-  Serial.begin(9600);
-  delay(100);
+   Serial.begin(9600);
+   delay(100);
   Serial1.begin(9600);
 
   WiFi.init(&Serial1);
@@ -59,14 +57,12 @@ void setup(){
   WiFi.begin(ssid, passwd);
   //attempt to connect to the WIFI network and then connect to the MQTT server
   reconnect();
-
   //wait a bit before starting the main loop
   delay(2000);
 
 
 
   
-  digitalWrite(rst, HIGH);
   motor.attach(mtr);
   motor.write(0);
 
@@ -76,9 +72,8 @@ void setup(){
   pinMode(led_r, OUTPUT);
   pinMode(led_g, OUTPUT);
   pinMode(buz, OUTPUT);
-  pinMode(rst, OUTPUT);
-  pinMode(button_rst, INPUT);
-
+  pinMode(led_wifi, OUTPUT);
+  digitalWrite(trig, LOW);
   Serial.begin(9600);
   }
 void loop(){
@@ -91,73 +86,84 @@ void loop(){
   }
 
   calculate();
-  
-  button();
-  
   alarme();
   
-Serial.println(lvl(1));
-  
-delay(1000);
+Serial.print("Volume: ");
+Serial.println(volume);
+
+if (millis() - anterior > 60000){
+  client.publish("/rexproject/esp/01", String(volume).c_str());
+  anterior = millis();
+}
+//client.publish("/rexproject/esp/01", String(lvl(1)).c_str(), true);
+
+delay(500);
 }
 
 void reset(){
-digitalWrite(rst, LOW);
-    motor.write(0);
+  motor.write(0);
+  delay(200);
+  float l = lvl(0);
+  Serial.print("Form: ");
+  Serial.println(form);
   while(1){
-    if (Serial.available() > 0){
-      form = Serial.read() - 48;
-      Serial.println(form);
-      if (form == 0){
-        raio = lvl(0);
+     if (form == 1){
+        raio = l;
+        //raio = 10;
         delay(1000);
         calculate();
         maximo = volume;
-      }else if (form == 1) {
-        lado_a = lvl(0);
+        _reset = 0;
+        break;
+      }else if (form == 0) {
+        lado_a = l;
         delay(1000);
         move_motor();
         calculate();
         maximo = volume;
-      }
-      _reset = 0;
-      break;
+        _reset = 0;
+        break;
+      }else if (form == 2){
+        lado_a = lvl(0);
+        delay(1000);
+        lado_b = lado_a;
+        calculate();
+        maximo = volume;
+        _reset = 0;
+        break;
+        }
     }
-  }
+  
+  tone(buz, 1000);
+  delay(2000);
+  noTone(buz);
 }
 void calculate(){
-  if (form == 0){
-    volume = 3.1415*(raio*raio)*lvl(1);
-  }else if(form == 1){
-    volume = (lado_b*lado_a)*lvl(1);
+  float h = lvl(1);
+  if (form == 1){
+      volume = 3.1415*(raio*raio)*h;
+  }else if(form == 0 || form == 2
+  ){
+      volume = (lado_b*lado_a)*h;
   }
-Serial.println("calculo");
-}
-
-void button(){
-  _reset = digitalRead(button_rst);
 }
 
 float lvl(int sensor){
   long pulse;
   float ret = 0.0;
   if (sensor == 0){
-    trigPulse();
+    trigPulse(trig);
     pulse = pulseIn(echo0, HIGH);
-    Serial.print("0:");
-    Serial.println(pulse);
   }else if (sensor == 1){
-    trigPulse();
+    trigPulse(trig);
     pulse = pulseIn(echo, HIGH);
-    Serial.print("1:");
-    Serial.println(pulse);
   }
     
     return microsecondsToCentimeters(pulse);
 }
 float microsecondsToCentimeters(long microseconds)
 {
-  return microseconds/29.0/2.0;
+  return microseconds/58.82;
 }
 void move_motor(){
   int pos;
@@ -172,13 +178,11 @@ void move_motor(){
     delay(10);                       // waits 15ms for the servo to reach the position
   }
 }
-void trigPulse()
+void trigPulse(const int a)
 {
-  digitalWrite(trig, LOW);
-  delayMicroseconds(2);     //duração de 10 micro segundos
-  digitalWrite(trig, HIGH);   //Pulso de trigge em nível baixo
-  delayMicroseconds(5);
-  digitalWrite(trig, LOW);
+  digitalWrite(a, HIGH);   //Pulso de trigge em nível baixo
+  delayMicroseconds(10);
+  digitalWrite(a, LOW);
 }
 void alarme(){
 int i = 0;
@@ -187,17 +191,16 @@ int i = 0;
       digitalWrite(led_g, LOW);
       digitalWrite(led_r, HIGH);
       tone(buz, 1000);
-      delay(10);
+      delay(100);
       digitalWrite(led_r, LOW);
       noTone(buz);
     }
     digitalWrite(led_g, HIGH);
     noTone(buz);
   }
-  Serial.println("Alarme");
-}
+  }
 
-void callback(char* topic, byte* payload, unsigned int length) {
+ void callback(char* topic, byte* payload, unsigned int length) {
 
   //convert topic to string to make it easier to work with
   String topicStr = topic; 
@@ -209,21 +212,22 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print(":");
 
   for(int i = 0; i < length; i++){
-    Serial.print((char*)payload);
+    Serial.print((char)payload[i]);
   }
 
   //turn the light on if the payload is '1' and publish to the MQTT server a confirmation message
   if(payload[0] == '1'){
-    client.publish("/rexproject/esp/01", "Paralelepípedo");
+    form = 1;
 
   }
 
   //turn the light off if the payload is '0' and publish to the MQTT server a confirmation message
   else if (payload[0] == '0'){
-    client.publish("/rexproject/esp/01", "Cilindro");
-  }
-
-}
+    form = 0;
+  } else if (payload[0] == '2'){
+    form = 2;
+    }
+ }
 
 void reconnect() {
 
@@ -259,11 +263,12 @@ void reconnect() {
       //if connected, subscribe to the topic(s) we want to be notified about
       if (client.connect((char*) clientName.c_str())) {
         Serial.print("\tMTQQ Connected");
+        digitalWrite(led_wifi, HIGH);
         client.subscribe(lightTopic);
       }
 
       //otherwise print failed for debugging
-      else{Serial.println("\tFailed."); abort();}
+      else{Serial.println("\tFailed."); abort();digitalWrite(led_wifi, LOW);}
     }
   }
 }
