@@ -4,8 +4,8 @@
 #include <Servo.h>
 
 #define MQTT_SERVER "test.mosca.io"
-char ssid[] = "Principia";
-char passwd[] = "hagios1687";
+char ssid[] = "rex";
+char passwd[] = "12345678";
 
 char* FormTopic = "/rexproject/esp/01/recipiente";
 
