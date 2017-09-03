@@ -3,11 +3,12 @@
 #include <SoftwareSerial.h>
 #include <Servo.h>
 
-#define MQTT_SERVER "test.mosca.io"
-#define FormTopic "/rexproject/esp/01/recipiente"
+#define MQTT_SERVER   "test.mosca.io"
+#define FormTopic     "/rexproject/esp/01/recipiente"
+#define ResponseTopic "/rexproject/esp/01/response"
 void callback(char* topic, byte* payload, unsigned int length);
 
-char ssid[] = "rex";
+char ssid[] = "MiniRex";
 char passwd[] = "rexproject0684";
 
 WiFiEspClient wifiClient;
@@ -17,19 +18,19 @@ SoftwareSerial Serial1(12, 13);
 Servo motor;
 
 //sensores
-#define Echo_S0 4 //Sensor 0
-#define Echo_S1  2 //Sensor 1
-#define Trig  3
+#define Echo_S0   4 //Sensor 0 - Comprimento, Largura, Raio
+#define Echo_S1   2 //Sensor 1 - Altura
+#define Trig      3
 
 //leds
-#define Led_Wifi 5
-#define LedRed 7
-#define LedGreen 8
+#define Led_Wifi  5
+#define LedRed    7
+#define LedGreen  8
 //buzzer
-#define Buzzer 9
+#define Buzzer    9
 
 //motor
-#define ServMtr 6
+#define ServMtr   6
 
 float Volume, Maximo, Lado_B;
 long Anterior = 0;
@@ -182,7 +183,7 @@ void MovServ(){
   }
   Lado_B = WaterLevel(0);
   delay(1000);
-  for (pos = 90; pos >= 0; pos--) { 
+  for (pos = 90; pos >= 3; pos--) { 
     motor.write(pos);              
     delay(10);                       
   }
@@ -213,6 +214,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   switch (payload[0]){
     case '0':
       Form = 0;
+      client.publish(ResponseTopic, "OK");
       First_Config = true;
       tone(Buzzer, 1000);
       delay(2000);
@@ -221,6 +223,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
     case '1':
       Form = 1;
+      client.publish(ResponseTopic, "OK");
       First_Config = true;
       tone(Buzzer, 1000);
       delay(2000);
@@ -229,6 +232,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
       
     case '2':
       Form = 2;
+      client.publish(ResponseTopic, "OK");
       First_Config = true;
       tone(Buzzer, 1000);
       delay(2000);
