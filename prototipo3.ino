@@ -1,4 +1,4 @@
-#include <PubSubClient.h>
+S#include <PubSubClient.h>
 #include <WiFiEsp.h>
 #include <SoftwareSerial.h>
 #include <Servo.h>
@@ -38,8 +38,8 @@ int Form;
 boolean First_Config = false;
 
 void Calculate();
-float WaterLevel(int n);
-void TrigPulse(const int a);
+float WaterLevel(int Sensor);
+void TrigPulse(int pin);
 void MovServ();
 void Alarme();
 
@@ -189,10 +189,10 @@ void MovServ(){
   }
 }
 
-void TrigPulse(int a){
-  digitalWrite(a, HIGH);   
+void TrigPulse(int pin){
+  digitalWrite(pin, HIGH);   
   delayMicroseconds(10);
-  digitalWrite(a, LOW);
+  digitalWrite(pin, LOW);
 }
 
 void Alarme(){
