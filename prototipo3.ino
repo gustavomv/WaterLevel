@@ -52,7 +52,7 @@ void setupWIFI() {
 
 void Revive() {
   while (!client.connected()) {
-    if (client.connect("ESP8266")) {
+    if (client.connect("ESP8266Client")) {
       client.subscribe(FormTopic);
     } else {
       delay(5000);
