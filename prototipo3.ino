@@ -3,13 +3,14 @@
 #include <SoftwareSerial.h>
 #include <Servo.h>
 
-#define MQTT_SERVER   "test.mosca.io"
+#define MQTT_SERVER   "broker.hivemq.com"
 #define FormTopic     "/rexproject/esp/01/recipiente"
-#define ResponseTopic "/rexproject/esp/01/response"
+#define ModTopic      "/rexproject/esp/01/operacao"
 void callback(char* topic, byte* payload, unsigned int length);
 
-char ssid[] = "MiniRex";
-char passwd[] = "rexproject0684";
+char ssid[] = "rex";
+char passwd[] = "12345678";
+String OpMode = " ";
 
 WiFiEspClient wifiClient;
 PubSubClient client(wifiClient);
@@ -34,12 +35,12 @@ Servo motor;
 
 float Volume, Maximo, Lado_B;
 long Anterior = 0;
-int Form;
+int Form = 0;
 boolean First_Config = false;
 
 void Calculate();
-float WaterLevel(int Sensor);
-void TrigPulse(int pin);
+float WaterLevel(int n);
+void TrigPulse(const int a);
 void MovServ();
 void Alarme();
 
@@ -54,6 +55,8 @@ void Revive() {
   while (!client.connected()) {
     if (client.connect("ESP8266Client")) {
       client.subscribe(FormTopic);
+      delay(100);
+      client.subscribe(ModTopic);
     } else {
       delay(5000);
     }
@@ -97,9 +100,13 @@ void loop(){
 
   if (First_Config){
     Calculate();
+    Serial.println(Volume);
+    Serial.println(WaterLevel(1));
     Alarme();
     if (millis() - Anterior > 1000){
-      client.publish("/rexproject/esp/01/volume", String(Volume).c_str());
+        if (OpMode == "Auto"){
+          client.publish("/rexproject/esp/01/volume", String(Volume).c_str());
+        }
       delay(500);
       client.publish("/rexproject/esp/01/altura", String(WaterLevel(1)).c_str());
       Anterior = millis();
@@ -111,14 +118,14 @@ void loop(){
 
 void Calculate(){
   float H = WaterLevel(1);
-  float Raio = WaterLevel(0);
+  float Raio = WaterLevel(0)+8;
   float Lado_A = Raio;
 
   switch (Form){
     case 0:
       MovServ();
       //Acrescentar diferenca das dimensoes da caixa pros sensores
-      Volume = (Lado_A*Lado_B)*H;
+      Volume = Lado_A*(Lado_B + 8)*H;
       Maximo = Volume;
       break;
 
@@ -189,10 +196,10 @@ void MovServ(){
   }
 }
 
-void TrigPulse(int pin){
-  digitalWrite(pin, HIGH);   
+void TrigPulse(int a){
+  digitalWrite(a, HIGH);   
   delayMicroseconds(10);
-  digitalWrite(pin, LOW);
+  digitalWrite(a, LOW);
 }
 
 void Alarme(){
@@ -214,7 +221,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   switch (payload[0]){
     case '0':
       Form = 0;
-      client.publish(ResponseTopic, "OK");
+      client.publish("rexproject/esp/01/alturaMax", String(WaterLevel(1)).c_str());
       First_Config = true;
       tone(Buzzer, 1000);
       delay(2000);
@@ -223,7 +230,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
     case '1':
       Form = 1;
-      client.publish(ResponseTopic, "OK");
+      client.publish("rexproject/esp/01/alturaMax", String(WaterLevel(1)).c_str());
       First_Config = true;
       tone(Buzzer, 1000);
       delay(2000);
@@ -232,11 +239,17 @@ void callback(char* topic, byte* payload, unsigned int length) {
       
     case '2':
       Form = 2;
-      client.publish(ResponseTopic, "OK");
+      client.publish("rexproject/esp/01/alturaMax", String(WaterLevel(1)).c_str());
       First_Config = true;
       tone(Buzzer, 1000);
       delay(2000);
       noTone(Buzzer);
+      break;
+
+    case 'M':
+      client.publish("/rexproject/esp/01/alturaMax", String(WaterLevel(1)).c_str());
+      First_Config = true;
+      OpMode = "Manual";
       break;
   }
 }
